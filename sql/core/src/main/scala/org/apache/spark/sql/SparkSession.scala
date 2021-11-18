@@ -901,6 +901,9 @@ object SparkSession extends Logging {
      */
     def getOrCreate(): SparkSession = synchronized {
       assertOnDriver()
+      // scalastyle:off println
+      println("getOrCreate");
+      println("123");
       // Get the session from current thread's active session.
       var session = activeThreadSession.get()
       if ((session ne null) && !session.sparkContext.isStopped) {
