@@ -40,6 +40,7 @@ object SparkSQLExample {
       .builder()
       .appName("Spark SQL basic example")
       .config("spark.some.config.option", "some-value")
+      .master("local[*]")
       .getOrCreate()
 
     // For implicit conversions like converting RDDs to DataFrames
