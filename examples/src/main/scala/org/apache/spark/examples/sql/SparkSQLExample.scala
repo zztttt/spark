@@ -40,6 +40,7 @@ object SparkSQLExample {
       .builder()
       .appName("Spark SQL basic example")
       .config("spark.some.config.option", "some-value")
+      .master("local[*]")
       .getOrCreate()
 
     // $example off:init_session$
