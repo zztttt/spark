@@ -16,9 +16,15 @@
  */
 package org.apache.spark.examples.sql
 
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.internal.Logging
+import org.apache.spark.sql.catalyst.AliasIdentifier
+import org.apache.spark.sql.catalyst.expressions.NamedExpression
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project, SubqueryAlias}
+import org.apache.spark.sql.execution.{QueryExecution, SparkPlan}
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
+import scala.collection.mutable.Map
 
-object SparkHudiSQL {
+object SparkHudiSQL extends Logging{
   def main(args: Array[String]): Unit = {
     val mysqlUrl = "rm-uf67ktcrjo69g32viko.mysql.rds.aliyuncs.com:3306/metastore";
     val mysqlPlaceHolder = "jdbc:mysql://%s?createDatabaseIfNotExist=true";
@@ -26,6 +32,7 @@ object SparkHudiSQL {
       .appName("Spark Debug")
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
+      .config("spark.sql.warehouse.dir", "hdfs://10.0.0.180:9000/warehouse")
       .config("javax.jdo.option.ConnectionURL", mysqlPlaceHolder.format(mysqlUrl))
       .config("javax.jdo.option.ConnectionDriverName", "com.mysql.cj.jdbc.Driver")
       .config("javax.jdo.option.ConnectionUserName", "zzt")
@@ -43,12 +50,10 @@ object SparkHudiSQL {
       .getOrCreate();
     runCreateTable(spark);
   }
-  private def runCreateTable(spark: SparkSession): Unit = {
-    val showDatabases = "show databases";
-    spark.sql(showDatabases).show();
 
-    val useDefault = "use default";
-    spark.sql(useDefault).show();
+  private def runCreateTable(spark: SparkSession): Unit = {
+//    spark.sql("""CREATE TABLE IF NOT EXISTS src (key INT, value STRING)
+//              USING hive location 'hdfs://10.0.0.180:9000/warehouse/%s'""")
 
     val tableName = "hudi_mor_tbl8";
     val createPlaceHolder = """create table %s (id int, name string, price double, ts bigint)
@@ -65,10 +70,47 @@ object SparkHudiSQL {
 
     val updatePlaceHolder = "update %s set price = price * 2, ts=11116 where id >= %d and id <= %d";
     val update = updatePlaceHolder.format(tableName, 2, 17);
-    spark.sql(update);
+//    spark.sql(update);
 
     val queryPlaceHolder = "select * from %s";
-    spark.sql(queryPlaceHolder.format(tableName)).show();
+    val df: DataFrame = spark.sql(queryPlaceHolder.format(tableName));
+
+    val queryExecution: QueryExecution = df.queryExecution;
+    val analyzed = queryExecution.analyzed;
+    val optimizedPlan: LogicalPlan = queryExecution.optimizedPlan;
+    val sparkPlan: SparkPlan = queryExecution.sparkPlan;
+    val executedPlan: SparkPlan = queryExecution.executedPlan;
+
+    val project: Project = analyzed.asInstanceOf[Project];
+    val child: SubqueryAlias = project.child.asInstanceOf[SubqueryAlias];
+    val identifier: AliasIdentifier = child.identifier;
+    val database = identifier.qualifier(1);
+    val name = identifier.name;
+    val projectList: Seq[NamedExpression] = project.projectList;
+
+    val attributions: Map[String, String] = Map();
+    projectList.foreach { e => {
+        if (!e.name.contains("_hoodie_")) {
+          attributions += (e.name -> e.dataType.simpleString)
+        }
+      }
+    }
+
+    spark.sql("use metadata_");
+    val hivePlaceHolder = """create table if not exists %s
+                            ( attribution string, usage_count int)
+                            using hive location 'hdfs://10.0.0.180:9000/warehouse/%s' """;
+    val hiveTableName = "metadata_.%s__%s".format(database, name);
+    spark.sql(hivePlaceHolder.format(hiveTableName, hiveTableName));
+    attributions.foreach { p => {
+        val initPlaceHolder = "insert into %s select '%s', 0";
+        spark.sql(initPlaceHolder.format(hiveTableName, p._1));
+      }
+    }
+
+
+    val data: Array[Row] = df.collect();
+    df.show();
 
     val showTable = "show tables";
     spark.sql(showTable).show();

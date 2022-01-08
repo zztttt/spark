@@ -21,11 +21,9 @@ import java.io.Closeable
 import java.util.UUID
 import java.util.concurrent.TimeUnit._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
-
 import scala.collection.JavaConverters._
 import scala.reflect.runtime.universe.TypeTag
 import scala.util.control.NonFatal
-
 import org.apache.spark.{SPARK_VERSION, SparkConf, SparkContext, TaskContext}
 import org.apache.spark.annotation.{DeveloperApi, Experimental, Stable, Unstable}
 import org.apache.spark.api.java.JavaRDD
@@ -37,8 +35,8 @@ import org.apache.spark.sql.catalog.Catalog
 import org.apache.spark.sql.catalyst._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders._
-import org.apache.spark.sql.catalyst.expressions.AttributeReference
-import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, Range}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, GenericRow}
+import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan, Range}
 import org.apache.spark.sql.catalyst.util.CharVarcharUtils
 import org.apache.spark.sql.connector.ExternalCommandRunner
 import org.apache.spark.sql.execution._
@@ -615,7 +613,12 @@ class SparkSession private(
     val plan = tracker.measurePhase(QueryPlanningTracker.PARSING) {
       sessionState.sqlParser.parsePlan(sqlText)
     }
-    Dataset.ofRows(self, plan, tracker)
+    val logicalPlan: LogicalPlan = plan
+    val ret: DataFrame = Dataset.ofRows(self, logicalPlan, tracker)
+
+
+
+    ret
   }
 
   /**
@@ -923,6 +926,7 @@ object SparkSession extends Logging {
       var session = activeThreadSession.get()
       if ((session ne null) && !session.sparkContext.isStopped) {
         applyModifiableSettings(session)
+        checkAndInitMetaDatabase(session)
         return session
       }
 
@@ -932,6 +936,7 @@ object SparkSession extends Logging {
         session = defaultSession.get()
         if ((session ne null) && !session.sparkContext.isStopped) {
           applyModifiableSettings(session)
+          checkAndInitMetaDatabase(session)
           return session
         }
 
@@ -956,7 +961,23 @@ object SparkSession extends Logging {
         registerContextListener(sparkContext)
       }
 
+      checkAndInitMetaDatabase(session)
       return session
+    }
+
+    private def checkAndInitMetaDatabase(session: SparkSession): Unit = {
+      val showDatabases = "show databases";
+      var isExist = false;
+      session.sql(showDatabases).collect().foreach { t: Row => {
+          logInfo(t.asInstanceOf[GenericRow].get(0).toString);
+          if (t.asInstanceOf[GenericRow].get(0).equals("metadata_")) {
+            isExist = true;
+          }
+        }
+      }
+      if (!isExist) {
+        session.sql("create schema metadata_");
+      }
     }
 
     private def applyModifiableSettings(session: SparkSession): Unit = {
