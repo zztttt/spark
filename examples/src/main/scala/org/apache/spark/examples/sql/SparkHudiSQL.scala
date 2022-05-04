@@ -16,13 +16,15 @@
  */
 package org.apache.spark.examples.sql
 
+import scala.collection.mutable.Map
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.catalyst.AliasIdentifier
 import org.apache.spark.sql.catalyst.expressions.NamedExpression
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project, SubqueryAlias}
 import org.apache.spark.sql.execution.{QueryExecution, SparkPlan}
-import org.apache.spark.sql.{DataFrame, Row, SparkSession}
-import scala.collection.mutable.Map
+import org.apache.spark.sql.mv.{SchemaRegistry, ViewCatalyst}
+
 
 object SparkHudiSQL extends Logging{
   def main(args: Array[String]): Unit = {
@@ -32,7 +34,7 @@ object SparkHudiSQL extends Logging{
       .appName("Spark Debug")
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
-      .config("spark.sql.warehouse.dir", "hdfs://10.0.0.180:9000/warehouse")
+      .config("spark.sql.warehouse.dir", "hdfs://localhost:9000/warehouse")
       .config("javax.jdo.option.ConnectionURL", mysqlPlaceHolder.format(mysqlUrl))
       .config("javax.jdo.option.ConnectionDriverName", "com.mysql.cj.jdbc.Driver")
       .config("javax.jdo.option.ConnectionUserName", "zzt")
@@ -48,7 +50,13 @@ object SparkHudiSQL extends Logging{
       .enableHiveSupport()
       .master("local[*]")
       .getOrCreate();
-    runCreateTable(spark);
+    initDb(spark);
+    // runCreateTable(spark);
+  }
+
+  private def initDb(spark: SparkSession): Unit = {
+    ViewCatalyst.createViewCatalyst()
+    var schemaRegistry: SchemaRegistry = new SchemaRegistry(spark);
   }
 
   private def runCreateTable(spark: SparkSession): Unit = {
