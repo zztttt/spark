@@ -31,8 +31,8 @@ class SchemaRegistry(_spark: SparkSession) {
     ViewCatalyst.meta.registerTableFromLogicalPlan(tableName, logicalPlan)
   }
 
-  def createMV(viewName: String, viewCreate: String) = {
-    val createViewTable1 = spark.sql(viewCreate)
+  def createMV(viewName: String, viewCreateSql: String) = {
+    val createViewTable1 = spark.sql(viewCreateSql)
     val df = spark.createDataFrame(createViewTable1.rdd, createViewTable1.schema)
     df.createOrReplaceTempView(viewName)
     ViewCatalyst.meta.registerTableFromLogicalPlan(viewName, df.queryExecution.analyzed)

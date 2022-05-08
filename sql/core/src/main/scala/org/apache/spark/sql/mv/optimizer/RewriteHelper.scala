@@ -278,7 +278,7 @@ trait RewriteHelper extends PredicateHelper {
     }
 
     // check projectList and where condition
-    normalizePlan(plan) match {
+    queryNormalizePlan match {
       case Project(projectList, Filter(condition, _)) =>
         queryConjunctivePredicates = splitConjunctivePredicates(condition)
         queryProjectList = projectList
@@ -297,7 +297,7 @@ trait RewriteHelper extends PredicateHelper {
 
     }
 
-    normalizePlan(rewriteContext.viewLogicalPlan.get().viewCreateLogicalPlan) match {
+    viewNormalizePlan match {
       case Project(projectList, Filter(condition, _)) =>
         viewConjunctivePredicates = splitConjunctivePredicates(condition)
         viewProjectList = projectList
