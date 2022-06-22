@@ -16,6 +16,7 @@
  */
 package org.apache.spark.examples.sql
 
+
 import scala.collection.mutable.Map
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
@@ -23,10 +24,11 @@ import org.apache.spark.sql.catalyst.AliasIdentifier
 import org.apache.spark.sql.catalyst.expressions.NamedExpression
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project, SubqueryAlias}
 import org.apache.spark.sql.execution.{QueryExecution, SparkPlan}
-import org.apache.spark.sql.mv.{MVOptimizRewrite, SchemaRegistry, ViewCatalyst}
+import org.apache.spark.sql.mv.{MVOptimizRewrite, SchemaRegistry}
 
 
 object SparkHudiSQL extends Logging{
+  private final val hdfs: String = "hdfs://reins-PowerEdge-R740-0:9000"
   def main(args: Array[String]): Unit = {
     val mysqlUrl = "rm-uf67ktcrjo69g32viko.mysql.rds.aliyuncs.com:3306/metastore";
     val mysqlPlaceHolder = "jdbc:mysql://%s?createDatabaseIfNotExist=true";
@@ -34,38 +36,130 @@ object SparkHudiSQL extends Logging{
       .appName("Spark Debug")
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
-      .config("spark.sql.warehouse.dir", "hdfs://localhost:9000/warehouse")
-      .config("javax.jdo.option.ConnectionURL", mysqlPlaceHolder.format(mysqlUrl))
-      .config("javax.jdo.option.ConnectionDriverName", "com.mysql.cj.jdbc.Driver")
-      .config("javax.jdo.option.ConnectionUserName", "zzt")
-      .config("javax.jdo.option.ConnectionPassword", "Zzt19980924x")
-      .config("spark.hadoop.datanucleus.autoCreateSchema", true)
-      .config("spark.hadoop.datanucleus.autoCreateTables", true)
-      .config("spark.hadoop.datanucleus.fixedDatastore", false)
-      .config("spark.hadoop.datanucleus.readOnlyDatastore", false)
-      .config("spark.hadoop.datanucleus.autoStartMechanism", "SchemaTable")
-      .config("spark.hadoop.datanucleus.autoStartMechanism", "SchemaTable")
-      .config("spark.hadoop.hive.metastore.schema.verification", false)
-      .config("spark.hadoop.hive.metastore.schema.verification.record.version", false)
+      .config("hive.metastore.uris", "thrift://reins-PowerEdge-R740-0:9083")
+      .config("spark.sql.warehouse.dir", "hdfs://reins-PowerEdge-R740-0:9000/zzt/data")
+      .config("enable_materialized_view", value = true)
+      //      .config("spark.sql.warehouse.dir", "hdfs://localhost:9000/warehouse")
+//      .config("javax.jdo.option.ConnectionURL", mysqlPlaceHolder.format(mysqlUrl))
+//      .config("javax.jdo.option.ConnectionDriverName", "com.mysql.cj.jdbc.Driver")
+//      .config("javax.jdo.option.ConnectionUserName", "zzt")
+//      .config("javax.jdo.option.ConnectionPassword", "Zzt19980924x")
+//      .config("spark.hadoop.datanucleus.autoCreateSchema", true)
+//      .config("spark.hadoop.datanucleus.autoCreateTables", true)
+//      .config("spark.hadoop.datanucleus.fixedDatastore", false)
+//      .config("spark.hadoop.datanucleus.readOnlyDatastore", false)
+//      .config("spark.hadoop.datanucleus.autoStartMechanism", "SchemaTable")
+//      .config("spark.hadoop.datanucleus.autoStartMechanism", "SchemaTable")
+//      .config("spark.hadoop.hive.metastore.schema.verification", false)
+//      .config("spark.hadoop.hive.metastore.schema.verification.record.version", false)
       .enableHiveSupport()
       .master("local[*]")
       .getOrCreate();
-    // test(spark);
+
+//    val create = "CREATE SCHEMA IF NOT EXISTS MV COMMENT 'Materialized View Table' LOCATION 'hdfs://reins-PowerEdge-R740-0:9000/zzt/mv'";
+//    println(spark.catalog.currentDatabase)
+//    spark.sql(create).show()
+//    spark.catalog.listDatabases().show()
+//    spark.catalog.setCurrentDatabase("MV")
+//    println(spark.catalog.currentDatabase)
+//    spark.catalog.listDatabases().show()
+
+    spark.sparkContext.setCheckpointDir(hdfs + "/zzt")
+    // spark.sql("select * from emps_large").show()
     // initDb(spark);
-    runHudi(spark);
-    // runCreateTable(spark);
+    // test(spark);
+    testAgg(spark)
   }
 
-  private def test(spark: SparkSession): Unit = {
-    // spark.sql("drop table depts_hudi");
+  private def testAgg(spark: SparkSession): Unit = {
+    val schemaRegistry: SchemaRegistry = new SchemaRegistry(spark)
+    val mvSql: String =
+      """
+        |select EMPNO, DEPTNO, count(*) AS c, sum(SALARY) As s
+        |from emps_large
+        |group by EMPNO, DEPTNO
+        |""".stripMargin
+    schemaRegistry.createCkptMV("emps_large_agg_mv_test", mvSql)
+    val original =
+      """
+        |select DEPTNO, count(*) AS c, sum(SALARY) as m
+        |from emps_large
+        |group by DEPTNO
+        |""".stripMargin
+    var start = System.currentTimeMillis()
+    spark.sql(original).show()
+    var end = System.currentTimeMillis()
+    val time1 = end - start
 
-    spark.sql("show tables").show();
-    spark.sql("select * from depts_hudi").show();
-    spark.sql("select * from emps_hudi").show();
+    start = System.currentTimeMillis()
+    val mv = schemaRegistry.loadCkptMV(spark, "emps_large_agg_mv", mvSql)
+    end = System.currentTimeMillis()
+    val time2 = end - start
+
+    start = System.currentTimeMillis()
+    val rewrite = MVOptimizRewrite.execute(schemaRegistry.toLogicalPlan(original))
+    end = System.currentTimeMillis();
+    val time3 = end - start
+
+    start = System.currentTimeMillis();
+    // spark.logicalPlanSql(rewrite).show();
+    // println(spark.logicalPlanSql(rewrite).count())
+    end = System.currentTimeMillis();
+    val time4 = end - start
+
+    logInfo("original time:" + String.valueOf(time1))
+    logInfo("load mv time:" + String.valueOf(time2))
+    logInfo("rewrite time:" + String.valueOf(time3))
+    logInfo("after rewritten time:" + String.valueOf(time4))
+ }
+
+  private def test(spark: SparkSession): Unit = {
+    val schemaRegistry: SchemaRegistry = new SchemaRegistry(spark)
+    val mvSql: String =
+      """
+        |SELECT EMPNO
+        |FROM emps_large JOIN depts_large ON depts_large.DEPTNO = emps_large.DEPTNO
+        |""".stripMargin
+    // schemaRegistry.createMV("emps_large_mv", mvSql)
+//    val mv = schemaRegistry.loadMV(spark, "emps_large_mv", mvSql)
+    // mv.show()
+    // println(mv.count())
+
+    val original =
+      """
+        |SELECT EMPNO
+        |FROM emps_large JOIN depts_large ON depts_large.DEPTNO = emps_large.DEPTNO
+        |WHERE EMPNO > 100000
+        |""".stripMargin
+    var startTime = System.currentTimeMillis();
+    // spark.sql(original).show()
+    // println(spark.sql(original).count())
+    var endTime = System.currentTimeMillis()
+    val time1 = endTime - startTime
+
+    startTime = System.currentTimeMillis()
+    val mv = schemaRegistry.loadCkptMV(spark, "emps_large_mv", mvSql)
+    endTime = System.currentTimeMillis();
+    val time2 = endTime - startTime
+
+    startTime = System.currentTimeMillis()
+    val rewrite = MVOptimizRewrite.execute(schemaRegistry.toLogicalPlan(original))
+    endTime = System.currentTimeMillis();
+    val time3 = endTime - startTime
+
+    startTime = System.currentTimeMillis();
+    spark.logicalPlanSql(rewrite).show();
+    // println(spark.logicalPlanSql(rewrite).count())
+    endTime = System.currentTimeMillis();
+    val time4 = endTime - startTime
+
+    logInfo("original time:" + String.valueOf(time1))
+    logInfo("load mv time:" + String.valueOf(time2))
+    logInfo("rewrite time:" + String.valueOf(time3))
+    logInfo("after rewritten time:" + String.valueOf(time4))
   }
 
   private def initDb(spark: SparkSession): Unit = {
-    ViewCatalyst.createViewCatalyst()
     var schemaRegistry: SchemaRegistry = new SchemaRegistry(spark);
 
     schemaRegistry.createTableInHudi(
@@ -74,7 +168,6 @@ object SparkHudiSQL extends Logging{
         | deptno INT NOT NULL,
         | deptname STRING
         | ) using hudi
-        | location 'hdfs://10.0.0.203:9000/hudi/depts_hudi'
         | tblproperties(
         |   type='mor',
         |   primaryKey='deptno'
@@ -90,7 +183,6 @@ object SparkHudiSQL extends Logging{
         | empname STRING NOT NULL,
         | salary DECIMAL (18,2)
         |) using hudi
-        | location 'hdfs://10.0.0.203:9000/hudi/emps_hudi'
         | tblproperties(
         |   type='mor',
         |   primaryKey='empid'
@@ -105,13 +197,14 @@ object SparkHudiSQL extends Logging{
   }
 
   private def runHudi(spark: SparkSession): Unit = {
-    ViewCatalyst.createViewCatalyst()
+    // ViewCatalyst.createViewCatalyst()
     val schemaRegistry: SchemaRegistry = new SchemaRegistry(spark);
-    schemaRegistry.createMV("emps_mv",
+    schemaRegistry.loadCkptMV(spark, "emps_mv",
       """SELECT empid
         |FROM emps_hudi JOIN depts_hudi ON depts_hudi.deptno = emps_hudi.deptno
         |""".stripMargin
     )
+    println(spark.catalog.tableExists("emps_mv"));
 
     var startTime = System.currentTimeMillis();
     spark.sql(
@@ -132,13 +225,13 @@ object SparkHudiSQL extends Logging{
     val time2 = endTime - startTime
 
     startTime = System.currentTimeMillis();
-    spark.logicalPlanSql(rewrite).show();
+    // spark.logicalPlanSql(rewrite).show();
     endTime = System.currentTimeMillis();
     val time3 = endTime - startTime
 
-    logInfo(String.valueOf(time1))
-    logInfo(String.valueOf(time2))
-    logInfo(String.valueOf(time3))
+    logInfo("original time:" + String.valueOf(time1))
+    logInfo("rewrite time:" + String.valueOf(time2))
+    logInfo("after rewritten time:" + String.valueOf(time3))
 
     // scala.io.StdIn.readLine()
   }

@@ -14,12 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.sql.mv.optimizer
+package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.optimizer.{EliminateOuterJoin, PushPredicateThroughJoin}
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.catalyst.rules.RuleExecutor
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.types.StructType
 
-object PreOptimizeRewrite extends RuleExecutor[LogicalPlan] {
-  val batches = Batch("Before join rewrite", FixedPoint(100), EliminateOuterJoin, PushPredicateThroughJoin) :: Nil
+import scala.reflect.ClassTag
+
+object CheckPointReflector {
+  def recover[T: ClassTag](spark: SparkSession, checkpointFilePath: String): RDD[T] = {
+    spark.sparkContext.checkpointFile[T](checkpointFilePath)
+  }
+
+  def createDataFrame(spark: SparkSession, rddRows: RDD[InternalRow], schema: StructType): DataFrame = {
+    spark.internalCreateDataFrame(rddRows, schema)
+  }
 }

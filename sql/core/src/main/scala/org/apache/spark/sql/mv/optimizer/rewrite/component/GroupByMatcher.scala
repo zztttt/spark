@@ -51,19 +51,18 @@ class GroupByMatcher(rewriteContext: RewriteContext) extends ExpressionMatcher {
     val view = rewriteContext.processedComponent.get().viewGroupingExpressions
     val viewAggregateExpressions = rewriteContext.processedComponent.get().viewAggregateExpressions
 
-    if (query.size > view.size) return RewriteFail.GROUP_BY_SIZE_UNMATCH(this)
-    if (!isSubSetOf(query, view)) return RewriteFail.GROUP_BY_SIZE_UNMATCH(this)
+    if (query.size > view.size)
+      return RewriteFail.GROUP_BY_SIZE_UNMATCH(this)
+    if (!isSubSetOf(query, view))
+      return RewriteFail.GROUP_BY_SIZE_UNMATCH(this)
 
     // again make sure the columns in queryLeft is also in view project/agg
-
     val viewAttrs = extractAttributeReferenceFromFirstLevel(viewAggregateExpressions)
-
     val compensationCondAllInViewProjectList = isSubSetOf(query.flatMap(extractAttributeReference), viewAttrs)
-
-    if (!compensationCondAllInViewProjectList) return RewriteFail.GROUP_BY_COLUMNS_NOT_IN_VIEW_PROJECT_OR_AGG(this)
+    if (!compensationCondAllInViewProjectList)
+      return RewriteFail.GROUP_BY_COLUMNS_NOT_IN_VIEW_PROJECT_OR_AGG(this)
 
     CompensationExpressions(true, query)
-
   }
 
   private def extractTheSameExpressionsOrder(view: Seq[Expression], query: Seq[Expression]) = {

@@ -14,12 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.sql.mv.optimizer
+package org.apache.spark.examples.sql.tpch
 
-import org.apache.spark.sql.catalyst.optimizer.{EliminateOuterJoin, PushPredicateThroughJoin}
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.catalyst.rules.RuleExecutor
+case class Depts(DEPTNO: Integer, DNAME: String, LOCATION: String)
 
-object PreOptimizeRewrite extends RuleExecutor[LogicalPlan] {
-  val batches = Batch("Before join rewrite", FixedPoint(100), EliminateOuterJoin, PushPredicateThroughJoin) :: Nil
-}
+case class Emps(EMPNO: Integer, ENAME: String, JOB: String, MGR: Integer, HIRE_DATE: String, DEPTNO: Integer, SALARY: Integer)

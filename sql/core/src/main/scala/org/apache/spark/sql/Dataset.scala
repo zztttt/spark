@@ -675,6 +675,14 @@ class Dataset[T] private[sql](
     reliableCheckpoint = false
   )
 
+  private def MaterializedViewCheckpoint() = {
+    withAction("checkpoint", queryExecution) { physicalPlan =>
+      val internalRdd = physicalPlan.execute().map(_.copy())
+      internalRdd.checkpoint()
+      internalRdd.count()
+    }
+  }
+
   /**
    * Returns a checkpointed version of this Dataset.
    *

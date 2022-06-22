@@ -928,7 +928,7 @@ object SparkSession extends Logging {
       var session = activeThreadSession.get()
       if ((session ne null) && !session.sparkContext.isStopped) {
         applyModifiableSettings(session)
-        checkAndInitMetaDatabase(session)
+        // checkAndInitMetaDatabase(session)
         return session
       }
 
@@ -938,7 +938,7 @@ object SparkSession extends Logging {
         session = defaultSession.get()
         if ((session ne null) && !session.sparkContext.isStopped) {
           applyModifiableSettings(session)
-          checkAndInitMetaDatabase(session)
+          // checkAndInitMetaDatabase(session)
           return session
         }
 
@@ -963,7 +963,7 @@ object SparkSession extends Logging {
         registerContextListener(sparkContext)
       }
 
-      checkAndInitMetaDatabase(session)
+      // checkAndInitMetaDatabase(session)
       return session
     }
 

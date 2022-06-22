@@ -350,6 +350,8 @@ class SparkContext(config: SparkConf) extends Logging {
 
   private[spark] var checkpointDir: Option[String] = None
 
+  private[spark] var materializedViewCheckpointDir: Option[String] = None
+
   // Thread Local variable that can be used by users to pass information down the stack
   protected[spark] val localProperties = new InheritableThreadLocal[Properties] {
     override protected def childValue(parent: Properties): Properties = {
@@ -2460,6 +2462,10 @@ class SparkContext(config: SparkConf) extends Logging {
     f
   }
 
+  def enableMaterializedView(): Boolean = {
+    this.getConf.getBoolean("enable_materialized_view", defaultValue = false)
+  }
+
   /**
    * Set the directory under which RDDs are going to be checkpointed.
    * @param directory path to the directory where checkpoint files will be stored
@@ -2471,21 +2477,37 @@ class SparkContext(config: SparkConf) extends Logging {
     // Otherwise, the driver may attempt to reconstruct the checkpointed RDD from
     // its own local file system, which is incorrect because the checkpoint files
     // are actually on the executor machines.
+
     if (!isLocal && Utils.nonLocalPaths(directory).isEmpty) {
       logWarning("Spark is not running in local mode, therefore the checkpoint directory " +
         s"must not be on the local filesystem. Directory '$directory' " +
         "appears to be on the local filesystem.")
     }
 
-    checkpointDir = Option(directory).map { dir =>
-      val path = new Path(dir, UUID.randomUUID().toString)
-      val fs = path.getFileSystem(hadoopConfiguration)
-      fs.mkdirs(path)
-      fs.getFileStatus(path).getPath.toString
+    if (enableMaterializedView()) {
+      checkpointDir = Option(directory).map { dir =>
+        val path = new Path(dir, "checkpoint_dir")
+        val fs = path.getFileSystem(hadoopConfiguration)
+        if (!fs.exists(path)) {
+          fs.mkdirs(path)
+        }
+        fs.getFileStatus(path).getPath.toString
+      }
+    } else {
+      checkpointDir = Option(directory).map { dir =>
+        val path = new Path(dir, UUID.randomUUID().toString)
+        val fs = path.getFileSystem(hadoopConfiguration)
+        if (!fs.exists(path)) {
+          fs.mkdirs(path)
+        }
+        fs.getFileStatus(path).getPath.toString
+      }
     }
   }
 
   def getCheckpointDir: Option[String] = checkpointDir
+
+  def getMaterializedViewCheckpointDir: Option[String] = materializedViewCheckpointDir
 
   /** Default level of parallelism to use when not given by user (e.g. parallelize and makeRDD). */
   def defaultParallelism: Int = {

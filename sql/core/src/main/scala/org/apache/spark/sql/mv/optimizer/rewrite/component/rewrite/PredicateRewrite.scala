@@ -28,10 +28,12 @@ class PredicateRewrite(rewriteContext: RewriteContext) extends LogicalPlanRewrit
     val newExpressions = _compensationExpressions.compensation.map { expr =>
       expr transformDown {
         case a@AttributeReference(name, dt, _, _) =>
-          extractAttributeReferenceFromFirstLevel(projectOrAggList).filter(f => attributeReferenceEqual(a, f)).head
+          // extractAttributeReferenceFromFirstLevel(projectOrAggList).filter(f => attributeReferenceEqual(a, f)).head
+          val attribution: Seq[AttributeReference] = extractAttributeReferenceFromFirstLevel(projectOrAggList)
+          attribution.filter(f => attributeReferenceEqual(a, f))
+          attribution.head
       }
     }
-
 
     val newPlan = plan transformDown {
       case a@Filter(condition, child) =>

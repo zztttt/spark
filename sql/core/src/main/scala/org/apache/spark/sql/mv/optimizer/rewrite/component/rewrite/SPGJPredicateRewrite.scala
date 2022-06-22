@@ -32,7 +32,7 @@ class SPGJPredicateRewrite(rewriteContext: RewriteContext) extends LogicalPlanRe
       }
     }
 
-    //clean filter and then add new filter before Join
+    // clean filter and then add new filter before Join
     var newPlan = plan transformDown {
       case a@Filter(condition, child) =>
         child

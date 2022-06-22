@@ -19,7 +19,7 @@ package org.apache.spark.sql.mv.optimizer.rewrite.rule
 import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan, SubqueryAlias}
 import org.apache.spark.sql.execution.LogicalRDD
 import org.apache.spark.sql.execution.datasources.LogicalRelation
-import org.apache.spark.sql.mv.ViewCatalyst
+import org.apache.spark.sql.mv.MaterializedViewCatalyst
 import org.apache.spark.sql.mv.optimizer.PreOptimizeRewrite
 import org.apache.spark.sql.mv.optimizer.rewrite.component.rewrite.{AggRewrite, GroupByRewrite, JoinRewrite, ProjectRewrite, SPGJPredicateRewrite}
 import org.apache.spark.sql.mv.optimizer.rewrite.component.{AggMatcher, GroupByMatcher, JoinMatcher, PredicateMatcher, ProjectMatcher}
@@ -56,18 +56,18 @@ class SPGJRule extends RewriteMatchRule {
 
     val mainTable = extractTablesFromPlan(mainTableLogicalPlan).head
 
-    val viewPlan = ViewCatalyst.meta.getCandidateViewsByTable(mainTable) match {
+    val viewPlan = MaterializedViewCatalyst.getInstance().getCandidateViewsByTable(mainTable) match {
       case Some(viewNames) =>
         viewNames.filter { viewName =>
-          ViewCatalyst.meta.getViewCreateLogicalPlan(viewName) match {
+          MaterializedViewCatalyst.getInstance().getViewCreateLogicalPlan(viewName) match {
             case Some(viewLogicalPlan) =>
               extractTablesFromPlan(viewLogicalPlan).toSet == tables.toSet
             case None => false
           }
         }.map { targetViewName =>
           ViewLogicalPlan(
-            ViewCatalyst.meta.getViewLogicalPlan(targetViewName).get,
-            ViewCatalyst.meta.getViewCreateLogicalPlan(targetViewName).get)
+            MaterializedViewCatalyst.getInstance().getViewLogicalPlan(targetViewName).get,
+            MaterializedViewCatalyst.getInstance().getViewCreateLogicalPlan(targetViewName).get)
         }.toSeq
       case None => Seq()
 

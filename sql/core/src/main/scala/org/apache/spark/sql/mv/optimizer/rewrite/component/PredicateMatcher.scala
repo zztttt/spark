@@ -35,7 +35,8 @@ class PredicateMatcher(rewriteContext: RewriteContext) extends ExpressionMatcher
         val queryEqual = extractEqualConditions(rewriteContext.processedComponent.get().queryConjunctivePredicates)
 
         // if viewEqual are not subset of queryEqual, then it will not match.
-        if (!isSubSetOf(viewEqual, queryEqual)) return RewriteFail.PREDICATE_EQUALS_UNMATCH(this)
+        if (!isSubSetOf(viewEqual, queryEqual))
+            return RewriteFail.PREDICATE_EQUALS_UNMATCH(this)
         compensationCond ++= subset[Expression](queryEqual, viewEqual)
 
         // less/greater expressions compare
@@ -53,31 +54,31 @@ class PredicateMatcher(rewriteContext: RewriteContext) extends ExpressionMatcher
         val viewRangeCondition = RangeFilter.combineAndMergeRangeCondition(viewRange).toSeq
         val queryRangeCondtion = RangeFilter.combineAndMergeRangeCondition(queryRange).toSeq
 
-        //again make sure viewRangeCondition.size is small queryRangeCondtion.size
+        // again make sure viewRangeCondition.size is small queryRangeCondtion.size
         if (viewRangeCondition.size > queryRangeCondtion.size) return RewriteFail.PREDICATE_RANGE_UNMATCH(this)
 
-        //all view rangeCondition  should a  SubRangeCondition of query
+        // all view rangeCondition  should a  SubRangeCondition of query
         val isRangeMatch = viewRangeCondition.map { viewRC =>
             if (queryRangeCondtion.filter(queryRC => queryRC.isSubRange(viewRC)).size >= 1) 1 else 0
         }.sum == viewRangeCondition.size
 
-        if (!isRangeMatch) return RewriteFail.PREDICATE_RANGE_UNMATCH(this)
-
+        if (!isRangeMatch)
+            return RewriteFail.PREDICATE_RANGE_UNMATCH(this)
         compensationCond ++= queryRangeCondtion.flatMap(_.toExpression)
 
         // other conditions compare
         val viewResidual = extractResidualConditions(rewriteContext.processedComponent.get().viewConjunctivePredicates)
         val queryResidual = extractResidualConditions(rewriteContext.processedComponent.get().queryConjunctivePredicates)
-        if (!isSubSetOf(viewResidual, queryResidual)) return RewriteFail.PREDICATE_EXACLTY_SAME_UNMATCH(this)
+        if (!isSubSetOf(viewResidual, queryResidual))
+            return RewriteFail.PREDICATE_EXACLTY_SAME_UNMATCH(this)
         compensationCond ++= subset[Expression](queryResidual, viewResidual)
 
         // make sure all attributeReference in compensationCond is also in output of view
         // we get all columns without applied any function in projectList of viewCreateLogicalPlan
         val viewAttrs = extractAttributeReferenceFromFirstLevel(rewriteContext.viewLogicalPlan.get().viewCreateLogicalPlan.output)
-
         val compensationCondAllInViewProjectList = isSubSetOf(compensationCond.flatMap(extractAttributeReference), viewAttrs)
-
-        if (!compensationCondAllInViewProjectList) return RewriteFail.PREDICATE_COLUMNS_NOT_IN_VIEW_PROJECT_OR_AGG(this)
+        if (!compensationCondAllInViewProjectList)
+            return RewriteFail.PREDICATE_COLUMNS_NOT_IN_VIEW_PROJECT_OR_AGG(this)
 
         // return the compensation expressions
         CompensationExpressions(true, compensationCond)

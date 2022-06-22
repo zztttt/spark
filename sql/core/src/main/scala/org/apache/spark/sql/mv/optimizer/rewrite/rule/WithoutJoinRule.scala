@@ -17,7 +17,7 @@
 package org.apache.spark.sql.mv.optimizer.rewrite.rule
 
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.mv.ViewCatalyst
+import org.apache.spark.sql.mv.MaterializedViewCatalyst
 import org.apache.spark.sql.mv.optimizer.rewrite.component.{AggMatcher, GroupByMatcher, PredicateMatcher, TableNonOpMatcher}
 import org.apache.spark.sql.mv.optimizer.rewrite.component.rewrite.{AggRewrite, GroupByRewrite, PredicateRewrite, TableOrViewRewrite}
 
@@ -32,18 +32,18 @@ class WithoutJoinRule extends RewriteMatchRule {
     if (tables.isEmpty)
       return Seq()
     val table = tables.head
-    val viewPlan = ViewCatalyst.meta.getCandidateViewsByTable(table) match {
+    val viewPlan = MaterializedViewCatalyst.getInstance().getCandidateViewsByTable(table) match {
       case Some(viewNames) =>
         viewNames.filter { viewName =>
-          ViewCatalyst.meta.getViewCreateLogicalPlan(viewName) match {
+          MaterializedViewCatalyst.getInstance().getViewCreateLogicalPlan(viewName) match {
             case Some(viewLogicalPlan) =>
               extractTablesFromPlan(viewLogicalPlan).toSet == Set(table)
             case None => false
           }
         }.map { targetViewName =>
           ViewLogicalPlan(
-            ViewCatalyst.meta.getViewLogicalPlan(targetViewName).get,
-            ViewCatalyst.meta.getViewCreateLogicalPlan(targetViewName).get)
+            MaterializedViewCatalyst.getInstance().getViewLogicalPlan(targetViewName).get,
+            MaterializedViewCatalyst.getInstance().getViewCreateLogicalPlan(targetViewName).get)
         }.toSeq
       case None => Seq()
 

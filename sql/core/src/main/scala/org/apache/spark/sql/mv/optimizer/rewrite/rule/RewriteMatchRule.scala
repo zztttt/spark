@@ -118,7 +118,7 @@ object RewriteFail {
   }
 
   def PREDICATE_EXACLTY_SAME_UNMATCH(matcher: ExpressionMatcher) = {
-    msg("PREDICATE_EXACLTY_SAME_UNMATCH", matcher)
+    msg("PREDICATE_EXACTLY_SAME_UNMATCH", matcher)
   }
 
   def PREDICATE_COLUMNS_NOT_IN_VIEW_PROJECT_OR_AGG(matcher: ExpressionMatcher) = {

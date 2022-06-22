@@ -73,9 +73,9 @@ This file is divided into 3 sections:
 
   <check level="error" class="org.scalastyle.file.WhitespaceEndOfLineChecker" enabled="true"></check>
 
-  <check level="error" class="org.scalastyle.file.FileLineLengthChecker" enabled="true">
+  <check level="error" class="org.scalastyle.file.FileLineLengthChecker" enabled="false">
     <parameters>
-      <parameter name="maxLineLength"><![CDATA[100]]></parameter>
+      <parameter name="maxLineLength"><![CDATA[1000]]></parameter>
       <parameter name="tabSize"><![CDATA[2]]></parameter>
       <parameter name="ignoreImports">true</parameter>
     </parameters>
@@ -105,7 +105,7 @@ This file is divided into 3 sections:
 
   <check level="error" class="org.scalastyle.scalariform.UppercaseLChecker" enabled="true"></check>
 
-  <check level="error" class="org.scalastyle.scalariform.IfBraceChecker" enabled="true">
+  <check level="error" class="org.scalastyle.scalariform.IfBraceChecker" enabled="false">
     <parameters>
       <parameter name="singleLineAllowed"><![CDATA[true]]></parameter>
       <parameter name="doubleLineAllowed"><![CDATA[true]]></parameter>
@@ -142,7 +142,7 @@ This file is divided into 3 sections:
   </check>
 
   <!-- As of SPARK-7977 all printlns need to be wrapped in '// scalastyle:off/on println' -->
-  <check customId="println" level="error" class="org.scalastyle.scalariform.TokenChecker" enabled="true">
+  <check customId="println" level="error" class="org.scalastyle.scalariform.TokenChecker" enabled="false">
     <parameters><parameter name="regex">^println$</parameter></parameters>
     <customMessage><![CDATA[Are you sure you want to println? If yes, wrap the code block with
       // scalastyle:off println
@@ -194,7 +194,7 @@ This file is divided into 3 sections:
     ]]></customMessage>
   </check>
 
-  <check customId="classforname" level="error" class="org.scalastyle.file.RegexChecker" enabled="true">
+  <check customId="classforname" level="error" class="org.scalastyle.file.RegexChecker" enabled="false">
     <parameters><parameter name="regex">Class\.forName</parameter></parameters>
     <customMessage><![CDATA[
       Are you sure that you want to use Class.forName? In most cases, you should use Utils.classForName instead.
@@ -284,7 +284,7 @@ This file is divided into 3 sections:
     is slower.  </customMessage>
   </check>
 
-  <check level="error" class="org.scalastyle.scalariform.ImportOrderChecker" enabled="true">
+  <check level="error" class="org.scalastyle.scalariform.ImportOrderChecker" enabled="false">
     <parameters>
       <parameter name="groups">java,scala,3rdParty,spark</parameter>
       <parameter name="group.java">javax?\..*</parameter>
@@ -367,7 +367,7 @@ This file is divided into 3 sections:
   <check level="error" class="org.scalastyle.scalariform.NoCloneChecker" enabled="false"></check>
 
   <!-- Doesn't seem super big deal here ... -->
-  <check level="error" class="org.scalastyle.file.FileLengthChecker" enabled="true">
+  <check level="error" class="org.scalastyle.file.FileLengthChecker" enabled="false">
     <parameters><parameter name="maxFileLength">1000></parameter></parameters>
   </check>
 

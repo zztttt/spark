@@ -75,7 +75,11 @@ private[spark] object ReliableRDDCheckpointData extends Logging {
 
   /** Return the path of the directory to which this RDD's checkpoint data is written. */
   def checkpointPath(sc: SparkContext, rddId: Int): Option[Path] = {
-    sc.checkpointDir.map { dir => new Path(dir, s"rdd-$rddId") }
+    if (sc.enableMaterializedView()) {
+      sc.checkpointDir.map { dir => new Path(dir, sc.getLocalProperty("view_name")) }
+    } else {
+      sc.checkpointDir.map { dir => new Path(dir, s"rdd-$rddId") }
+    }
   }
 
   /** Clean up the files associated with the checkpoint data for this RDD. */

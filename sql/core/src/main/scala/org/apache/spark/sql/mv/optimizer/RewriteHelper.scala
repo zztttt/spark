@@ -264,7 +264,8 @@ trait RewriteHelper extends PredicateHelper {
 
     val queryNormalizePlan = normalizePlan(plan)
     val viewNormalizePlan = normalizePlan(rewriteContext.viewLogicalPlan.get.viewCreateLogicalPlan)
-    //collect all predicates
+
+    // collect all predicates
     viewNormalizePlan transformDown {
       case a@Filter(condition, _) =>
         viewConjunctivePredicates ++= splitConjunctivePredicates(condition)
@@ -285,11 +286,11 @@ trait RewriteHelper extends PredicateHelper {
       case Project(projectList, _) =>
         queryProjectList = projectList
 
-      case Aggregate(groupingExpressions, aggregateExpressions, Filter(condition, _)) => {
+      case Aggregate(groupingExpressions, aggregateExpressions, Filter(condition, _)) =>
         queryConjunctivePredicates = splitConjunctivePredicates(condition)
         queryGroupingExpressions = groupingExpressions
         queryAggregateExpressions = aggregateExpressions
-      }
+
       case Aggregate(groupingExpressions, aggregateExpressions, _) =>
         queryGroupingExpressions = groupingExpressions
         queryAggregateExpressions = aggregateExpressions
