@@ -169,6 +169,7 @@ class LogicalPlanRewritePipeline(pipeline: Seq[PipelineItemExecutor]) extends Lo
     (0 until pipeline.size).foreach { index =>
 
       if (!planRewrite.stopPipeline) {
+        val start = System.currentTimeMillis()
         pipeline(index).execute(planRewrite) match {
           case a@RewritedLogicalPlan(_, true) =>
             logInfo(s"Pipeline item [${pipeline(index)}] fails. ")
@@ -176,6 +177,7 @@ class LogicalPlanRewritePipeline(pipeline: Seq[PipelineItemExecutor]) extends Lo
           case a@RewritedLogicalPlan(_, false) =>
             planRewrite = a
         }
+        logWarning("pipeline index:" + index + ". " + String.valueOf(System.currentTimeMillis() - start))
       }
     }
     planRewrite
@@ -194,7 +196,7 @@ case class PipelineItemExecutor(matcher: ExpressionMatcher, reWriter: LogicalPla
         reWriter.compensationExpressions(compsation)
         reWriter.rewrite(plan)
       case CompensationExpressions(false, _) =>
-        logInfo(s"=====Rewrite fail:${matcher.rewriteFail.map(_.msg).getOrElse("NONE")}=====")
+        logWarning(s"=====Rewrite fail:${matcher.rewriteFail.map(_.msg).getOrElse("NONE")}=====")
         println(s"=====Rewrite fail:${matcher.rewriteFail.map(_.msg).getOrElse("NONE")}=====")
         RewritedLogicalPlan(plan, stopPipeline = true)
     }

@@ -47,7 +47,8 @@ class SPGJPredicateRewrite(rewriteContext: RewriteContext) extends LogicalPlanRe
 
     newPlan = plan transformDown {
       case a@Join(_, _, _, _, _) =>
-        if (a == lastJoin) {
+        if (a == lastJoin && newExpressions.nonEmpty) {
+          // bug. raise unsupportedException empty.reduceLeft if newExpressions is empty!
           RewritedLeafLogicalPlan(Filter(mergeConjunctiveExpressions(newExpressions), a))
         } else a
     }

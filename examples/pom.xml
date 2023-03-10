@@ -41,9 +41,9 @@
 
   <dependencies>
     <dependency>
-      <groupId>ru.yandex.clickhouse</groupId>
-      <artifactId>clickhouse-jdbc</artifactId>
-      <version>0.2.5</version>
+      <groupId>io.delta</groupId>
+      <artifactId>delta-core_2.12</artifactId>
+      <version>1.0.1</version>
     </dependency>
     <!-- https://mvnrepository.com/artifact/org.apache.httpcomponents/httpclient -->
     <dependency>

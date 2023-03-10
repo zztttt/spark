@@ -36,7 +36,7 @@ object RewriteTableToViews extends Rule[LogicalPlan] with PredicateHelper {
   def apply(plan: LogicalPlan): LogicalPlan = {
     var lastPlan = plan
     var shouldStop = false
-    var count = 100
+    var count = 1
     val rewriteContext = new RewriteContext(new AtomicReference[ViewLogicalPlan](), new AtomicReference[ProcessedComponent]())
     while (!shouldStop && count > 0) {
       count -= 1
@@ -58,7 +58,6 @@ object RewriteTableToViews extends Rule[LogicalPlan] with PredicateHelper {
       } else {
         shouldStop = true
       }
-
       lastPlan = currentPlan
     }
     lastPlan
@@ -68,18 +67,20 @@ object RewriteTableToViews extends Rule[LogicalPlan] with PredicateHelper {
     // this plan is SPJG, but the first step is check whether we can rewrite it
     var rewritePlan = plan
     batches.foreach { rewriter =>
+      val start = System.currentTimeMillis()
       rewritePlan = rewriter.rewrite(rewritePlan, rewriteContext)
+      logWarning("rewriter time:" + String.valueOf(System.currentTimeMillis() - start))
     }
 
     rewritePlan match {
       case RewritedLogicalPlan(_, true) =>
-        logInfo(s"=====try to rewrite but fail ======:\n\n${plan} ")
+        logWarning(s"=====try to rewrite but fail ======:\n\n${plan} ")
         plan
       case RewritedLogicalPlan(inner, false) =>
-        logInfo(s"=====try to rewrite and success ======:\n\n${plan}  \n\n ${inner}")
+        logWarning(s"=====try to rewrite and success ======:\n\n${plan}  \n\n ${inner}")
         inner
       case _ =>
-        logInfo(s"=====try to rewrite but fail ======:\n\n${plan} ")
+        logWarning(s"=====try to rewrite but fail ======:\n\n${plan} ")
         rewritePlan
     }
   }
@@ -92,9 +93,6 @@ object RewriteTableToViews extends Rule[LogicalPlan] with PredicateHelper {
    * @return
    */
   private def isSPJG(plan: LogicalPlan): Boolean = {
-    // scalastyle:off println
-    println(plan)
-    // scalastyle:on println
     var isMatch = true
     plan transformDown {
       case a@SubqueryAlias(_, Project(_, _)) =>
@@ -114,12 +112,12 @@ object RewriteTableToViews extends Rule[LogicalPlan] with PredicateHelper {
       case p@Project(_, Filter(_, Join(_, _, _, _, _))) => true
       case p@Aggregate(_, _, Filter(_, Join(_, _, _, _, _))) => true
       case p@Aggregate(_, _, Filter(_, _)) => true
-      case p@Project(_, Filter(_, _)) => true
       case p@Aggregate(_, _, Join(_, _, _, _, _)) => true
       case p@Aggregate(_, _, SubqueryAlias(_, LogicalRDD(_, _, _, _, _))) => true
       case p@Aggregate(_, _, SubqueryAlias(_, LogicalRelation(_, _, _, _))) => true
       case p@Project(_, SubqueryAlias(_, LogicalRDD(_, _, _, _, _))) => true
       case p@Project(_, SubqueryAlias(_, LogicalRelation(_, _, _, _))) => true
+      case p@Project(_, Filter(_, Aggregate(_, _, _))) => false // for having
       case _ => false
     }
   }

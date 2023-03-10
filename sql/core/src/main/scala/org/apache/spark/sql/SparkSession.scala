@@ -615,7 +615,6 @@ class SparkSession private(
     }
     val logicalPlan: LogicalPlan = plan
     val ret: DataFrame = Dataset.ofRows(self, logicalPlan, tracker)
-
     ret
   }
 

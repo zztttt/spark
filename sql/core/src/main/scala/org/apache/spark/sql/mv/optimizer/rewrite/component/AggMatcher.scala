@@ -58,8 +58,6 @@ class AggMatcher(rewriteContext: RewriteContext) extends ExpressionMatcher {
 
 
   /**
-   * let's take care the third situation, any agg filed both in view/query, we should replace it with new field in view
-   *
    * query:
    *
    * SELECT deptno, COUNT(*) AS c, SUM(salary) AS s
@@ -82,11 +80,12 @@ class AggMatcher(rewriteContext: RewriteContext) extends ExpressionMatcher {
    */
 
 
-  val exactlySame = query.filterNot { item =>
+   // avg, count must be exactly same
+  val exactlySame = query.filter { item =>
    item match {
-    case a@Alias(agg@AggregateExpression(Average(ar@_), _, _, _, _), name) => false
-    case a@Alias(agg@AggregateExpression(Count(_), _, _, _, _), name) => false
-    case _ => true
+    case a@Alias(agg@AggregateExpression(Average(ar@_), _, _, _, _), name) => true
+    case a@Alias(agg@AggregateExpression(Count(_), _, _, _, _), name) => true
+    case _ => false
    }
   }
 
@@ -101,22 +100,29 @@ class AggMatcher(rewriteContext: RewriteContext) extends ExpressionMatcher {
 
   var queryReplaceAgg = query
 
+  // replace the aggregate function in query with those in views
   queryReplaceAgg = queryReplaceAgg.map { item =>
    item transformUp  {
     case a@Alias(agg@AggregateExpression(Average(ar@_), _, _, _, _), name) => a
     case a@Alias(agg@AggregateExpression(Count(_), _, _, _, _), name) => a
     case a@Alias(agg@AggregateExpression(_, _, _, _, _), name) =>
-     val (vItem, index) = view.zipWithIndex.filter { case (vItem, index) =>
+     // need to be replace
+     val filtered = view.zipWithIndex.filter{ case (vItem, index) =>
       cleanAlias(vItem).semanticEquals(cleanAlias(a))
-     }.head
-     val newVItem = vItem transformDown {
-      case a@AttributeReference(_, _, _, _) => viewProjectOrAggList(index)
+    }
+     if (filtered.size > 0) {
+      val (vItem, index) = filtered.head
+      val newVItem = vItem transformDown {
+       case a@AttributeReference(_, _, _, _) => viewProjectOrAggList(index)
+      }
+      Alias(cleanAlias(newVItem), name)()
+     } else {
+      return RewriteFail.AGG_COLUMNS_UNMATCH(this)
      }
-     Alias(cleanAlias(newVItem), name)()
    }
   }
 
-
+  // replace count(*)
   var queryReplaceCountStar = queryReplaceAgg
 
   if (queryCountStar.size > 0) {
@@ -159,9 +165,7 @@ class AggMatcher(rewriteContext: RewriteContext) extends ExpressionMatcher {
    }
   }
 
-
   CompensationExpressions(true, queryReplaceAvg)
-
  }
 
 

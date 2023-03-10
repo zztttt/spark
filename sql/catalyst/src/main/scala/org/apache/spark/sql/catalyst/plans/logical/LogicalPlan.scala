@@ -31,7 +31,8 @@ abstract class LogicalPlan
   with AnalysisHelper
   with LogicalPlanStats
   with QueryPlanConstraints
-  with Logging {
+  with Logging
+  with Serializable {
 
   /**
    * Metadata fields that can be projected from this node.

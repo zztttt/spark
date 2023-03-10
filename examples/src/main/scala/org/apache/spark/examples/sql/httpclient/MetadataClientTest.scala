@@ -25,8 +25,8 @@ import org.apache.http.util.EntityUtils
 
 import scala.io.Source
 
-object MetadataClient {
-  val url = "http://localhost:8080"
+object MetadataClientTest {
+  val url = "http://202.120.40.106:8080"
   val httpClient = new DefaultHttpClient()
   def main(args: Array[String]): Unit = {
 //    try {

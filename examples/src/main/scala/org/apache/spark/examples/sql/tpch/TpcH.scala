@@ -18,24 +18,30 @@ package org.apache.spark.examples.sql.tpch
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION_OPT_KEY, PARTITIONPATH_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.QuickstartUtils.getQuickstartWriteConfigs
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
 
 object TpcH extends Logging {
-  private final val path = "/home/zzt/code/data/tpch-1G/"
+  private final val path = "/Users/zzt/deploy/tpch_10G/"
+  private final val host: String = "localhost"
+  private final val hdfs: String = String.format("hdfs://%s:9000", host)
+  private final val hiveMetastore = String.format("thrift://%s:9083", host)
 
   def main(args: Array[String]): Unit = {
     val spark = SparkSession.builder()
       .appName("Spark TPC-H")
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
-      .config("hive.metastore.uris", "thrift://reins-PowerEdge-R740-0:9083")
-      .config("spark.sql.warehouse.dir", "hdfs://reins-PowerEdge-R740-0:9000/zzt/data")
+//      .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
+//      .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
+      .config("hive.metastore.uris", hiveMetastore)
+      .config("spark.sql.warehouse.dir", hdfs + "/zzt/data")
       .enableHiveSupport()
       .master("local[*]")
       .getOrCreate()
-    spark.catalog.setCurrentDatabase("MV")
+    // spark.catalog.setCurrentDatabase("MV")
     import spark.implicits._
     // nation
     //    val schema = new StructType()
@@ -47,9 +53,10 @@ object TpcH extends Logging {
       .map(_.split('|'))
       .map(p => Nation(p(0).toInt, p(1).toString, p(2).toInt, p(3).toString))
       .toDF();
-    data.write.mode(SaveMode.Overwrite).saveAsTable("test_hive")
+    // data.write.mode(SaveMode.Overwrite).saveAsTable("test_hive")
     // data.show()
-    // sink(data, "nation", "N_NATIONKEY")
+     sink(data, "nation", "N_NATIONKEY")
+//    sinkDelta(data, "nation")
 
     // part
     data = spark.sparkContext.textFile(path + "part.tbl")
@@ -57,7 +64,8 @@ object TpcH extends Logging {
       .map(p => Part(p(0).toInt, p(1).toString, p(2).toString, p(3).toString, p(4).toString, p(5).toInt, p(6).toString, p(7).toDouble, p(8).toString))
       .toDF()
     // data.show()
-    // sink(data, "part", "P_PARTKEY")
+     sink(data, "part", "P_PARTKEY")
+//    sinkDelta(data, "part")
 
     // supplier
     data = spark.sparkContext.textFile(path + "supplier.tbl")
@@ -65,7 +73,8 @@ object TpcH extends Logging {
       .map(p => Supplier(p(0).toInt, p(1).toString, p(2).toString, p(3).toInt, p(4).toString, p(5).toDouble, p(6).toString))
       .toDF()
     // data.show()
-    // sink(data, "supplier", "S_SUPPKEY", "S_SUPPKEY")
+     sink(data, "supplier", "S_SUPPKEY")
+//    sinkDelta(data, "supplier")
 
     // partsupp
     data = spark.sparkContext.textFile(path + "partsupp.tbl")
@@ -73,7 +82,8 @@ object TpcH extends Logging {
       .map(p => Partsupp(p(0).toInt, p(1).toInt, p(2).toInt, p(3).toDouble, p(4).toString))
       .toDF()
     // data.show()
-    // sink(data, "partsupp", "PS_PARTKEY,PS_SUPPKEY")
+     sink(data, "partsupp", "PS_PARTKEY,PS_SUPPKEY")
+//    sinkDelta(data, "partsupp")
 
     // customer
     data = spark.sparkContext.textFile(path + "customer.tbl")
@@ -81,7 +91,8 @@ object TpcH extends Logging {
       .map(p => Customer(p(0).toInt, p(1).toString, p(2).toString, p(3).toInt, p(4).toString, p(5).toDouble, p(6).toString, p(7).toString))
       .toDF()
     // data.show()
-    // sink(data, "customer", "C_CUSTKEY")
+     sink(data, "customer", "C_CUSTKEY")
+//    sinkDelta(data, "customer")
 
     // orders
     data = spark.sparkContext.textFile(path + "orders.tbl")
@@ -90,16 +101,19 @@ object TpcH extends Logging {
       .toDF()
     // data.show()
     // data.createOrReplaceTempView("orders")
-    // sink(data, "orders", "O_ORDERKEY")
+     sink(data, "orders", "O_ORDERKEY")
+//    sinkDelta(data, "orders")
 
-
+    // lineitem
     data = spark.sparkContext.textFile(path + "lineitem.tbl")
       .map(_.split('|'))
       .map(p => LineItem(p(0).toInt, p(1).toInt, p(2).toInt, p(3).toInt, p(4).toDouble, p(5).toDouble, p(6).toDouble, p(7).toDouble, p(8).toString, p(9).toString, p(10).toString, p(11).toString, p(12).toString, p(13).toString, p(14).toString, p(15).toString))
       .toDF()
     // data.show()
     // data.createOrReplaceTempView("lineItem")
-    // sink(data, "lineitem", "L_ORDERKEY,L_PARTKEY,L_SUPPKEY")
+    sink(data, "lineitem", "L_ORDERKEY,L_PARTKEY,L_SUPPKEY")
+//    sinkDelta(data, "lineitem")
+//    data.write.format("parquet").saveAsTable("lineitem_parquet")
 
     // region
     data = spark.sparkContext.textFile(path + "region.tbl")
@@ -107,14 +121,16 @@ object TpcH extends Logging {
       .map(p => Region(p(0).toInt, p(1).toString, p(2).toString))
       .toDF()
     // data.show()
-    // sink(data, "region", "R_REGIONKEY")
+     sink(data, "region", "R_REGIONKEY")
+//    sinkDelta(data, "region")
   }
 
   def sink(data: DataFrame, tableName: String, recordKey: String, preCombine: String): Unit = {
     data.write.format("org.apache.hudi")
+      .options(getQuickstartWriteConfigs)
       .option(HoodieWriteConfig.TABLE_NAME, tableName)
-      .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, recordKey)
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "")
+      .option(RECORDKEY_FIELD.key(), recordKey)
+      .option(PARTITIONPATH_FIELD.key(), "")
       .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY, preCombine)
       .mode(SaveMode.Overwrite)
       .saveAsTable(tableName)
@@ -122,13 +138,22 @@ object TpcH extends Logging {
 
   def sink(data: DataFrame, tableName: String, recordKey: String): Unit = {
     data.write.format("org.apache.hudi")
+      .options(getQuickstartWriteConfigs)
       .option(HoodieWriteConfig.TABLE_NAME, tableName)
       .option(RECORDKEY_FIELD.key(), recordKey)
       .option(PARTITIONPATH_FIELD.key(), "")
       .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY, "org.apache.hudi.keygen.ComplexKeyGenerator")
       .option(OPERATION_OPT_KEY, "INSERT") // 指定了就不需要preCombine
-      .option("hoodie.upsert.shuffle.parallelism", 2)
+      .option("hoodie.parquet.small.file.limit", "0")
+      .option("hoodie.clustering.inline", "true")
+      .option("hoodie.clustering.inline.max.commits", "4")
+      .option("hoodie.clustering.plan.strategy.target.file.max.bytes", "1073741824")
+      .option("hoodie.clustering.plan.strategy.small.file.limit", "629145600")
       .mode(SaveMode.Overwrite)
       .saveAsTable(tableName)
+  }
+
+  def sinkDelta(data: DataFrame, tableName: String): Unit = {
+    data.write.format("delta").mode("overwrite").saveAsTable(tableName + "_delta")
   }
 }

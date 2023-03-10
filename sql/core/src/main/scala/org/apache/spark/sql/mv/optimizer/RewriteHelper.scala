@@ -94,8 +94,6 @@ trait RewriteHelper extends PredicateHelper {
    *
    */
   protected def normalizePlan(plan: LogicalPlan): LogicalPlan = {
-
-
     plan transform {
       case Filter(condition: Expression, child: LogicalPlan) =>
         Filter(splitConjunctivePredicates(condition).map(rewriteEqual).sortBy(hashCode)
@@ -123,7 +121,7 @@ trait RewriteHelper extends PredicateHelper {
     }
   }
 
-  def extractTablesFromPlan(plan: LogicalPlan) = {
+  def extractTablesFromPlan(plan: LogicalPlan): Seq[String] = {
     extractTableHolderFromPlan(plan).map { holder =>
       if (holder.db != null) holder.db + "." + holder.table
       else holder.table
@@ -294,8 +292,6 @@ trait RewriteHelper extends PredicateHelper {
       case Aggregate(groupingExpressions, aggregateExpressions, _) =>
         queryGroupingExpressions = groupingExpressions
         queryAggregateExpressions = aggregateExpressions
-
-
     }
 
     viewNormalizePlan match {
@@ -337,7 +333,7 @@ trait RewriteHelper extends PredicateHelper {
 
   }
 
-  def extractFirstLevelJoin(plan: LogicalPlan) = {
+  def extractFirstLevelJoin(plan: LogicalPlan): Join = {
     plan match {
       case p@Project(_, join@Join(_, _, _, _, _)) => join
       case p@Project(_, Filter(_, join@Join(_, _, _, _, _))) => join
@@ -345,6 +341,4 @@ trait RewriteHelper extends PredicateHelper {
       case p@Aggregate(_, _, join@Join(_, _, _, _, _)) => join
     }
   }
-
-
 }

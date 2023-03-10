@@ -20,6 +20,8 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, NamedExpre
 import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, LogicalPlan}
 import org.apache.spark.sql.mv.optimizer.rewrite.rule.{LogicalPlanRewrite, RewriteContext, RewritedLeafLogicalPlan}
 
+import scala.collection.mutable.ListBuffer
+
 class AggRewrite(rewriteContext: RewriteContext) extends LogicalPlanRewrite {
   override def rewrite(plan: LogicalPlan): LogicalPlan = {
     val projectOrAggList = rewriteContext.viewLogicalPlan.get().tableLogicalPlan.output
@@ -27,9 +29,17 @@ class AggRewrite(rewriteContext: RewriteContext) extends LogicalPlanRewrite {
     val newExpressions = _compensationExpressions.compensation.map { expr =>
       expr transformDown {
         case a@AttributeReference(name, dt, _, _) =>
-          val newAr = extractAttributeReferenceFromFirstLevel(projectOrAggList).filter(f => attributeReferenceEqual(a, f)).head
-          rewriteContext.replacedARMapping += (a.withQualifier(Seq()) -> newAr)
-          newAr
+          val attribution: Seq[AttributeReference] = extractAttributeReferenceFromFirstLevel(projectOrAggList)
+          val ret = ListBuffer[AttributeReference]()
+          attribution.foreach(attr => {
+            if (attributeReferenceEqual(attr, a)) {
+              ret.append(attr)
+            }
+          })
+          ret.head
+//          val newAr = extractAttributeReferenceFromFirstLevel(projectOrAggList).filter(f => attributeReferenceEqual(a, f)).head
+//          rewriteContext.replacedARMapping += (a.withQualifier(Seq()) -> newAr)
+//          newAr
       }
     }.map(_.asInstanceOf[NamedExpression])
     val newPlan = plan transformDown {

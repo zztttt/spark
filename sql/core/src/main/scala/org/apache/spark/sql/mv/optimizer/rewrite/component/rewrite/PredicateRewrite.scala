@@ -20,6 +20,8 @@ import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan}
 import org.apache.spark.sql.mv.optimizer.rewrite.rule.{LogicalPlanRewrite, RewriteContext, RewritedLeafLogicalPlan}
 
+import scala.collection.mutable.ListBuffer
+
 class PredicateRewrite(rewriteContext: RewriteContext) extends LogicalPlanRewrite {
   override def rewrite(plan: LogicalPlan): LogicalPlan = {
 
@@ -30,8 +32,15 @@ class PredicateRewrite(rewriteContext: RewriteContext) extends LogicalPlanRewrit
         case a@AttributeReference(name, dt, _, _) =>
           // extractAttributeReferenceFromFirstLevel(projectOrAggList).filter(f => attributeReferenceEqual(a, f)).head
           val attribution: Seq[AttributeReference] = extractAttributeReferenceFromFirstLevel(projectOrAggList)
-          attribution.filter(f => attributeReferenceEqual(a, f))
-          attribution.head
+          val ret = ListBuffer[AttributeReference]()
+          attribution.foreach(attr => {
+            if (attributeReferenceEqual(attr, a)) {
+              ret.append(attr)
+            }
+          })
+          ret.head
+//          attribution.filter(f => attributeReferenceEqual(a, f))
+//          attribution.head
       }
     }
 

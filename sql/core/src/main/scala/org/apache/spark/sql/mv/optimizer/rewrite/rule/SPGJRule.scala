@@ -79,7 +79,8 @@ class SPGJRule extends RewriteMatchRule {
   override def rewrite(_plan: LogicalPlan, rewriteContext: RewriteContext): LogicalPlan = {
     val plan = PreOptimizeRewrite.execute(_plan)
     var targetViewPlanOption = fetchView(plan, rewriteContext)
-    if (targetViewPlanOption.isEmpty) return plan
+    if (targetViewPlanOption.isEmpty)
+      return plan
 
     targetViewPlanOption = targetViewPlanOption.map(f =>
       f.copy(viewCreateLogicalPlan = PreOptimizeRewrite.execute(f.viewCreateLogicalPlan)))

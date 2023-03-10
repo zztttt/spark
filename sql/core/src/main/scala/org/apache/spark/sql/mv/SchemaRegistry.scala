@@ -20,16 +20,20 @@ import com.google.gson.{Gson, JsonArray, JsonObject}
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkException
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.{InternalRow, QueryPlanningTracker}
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.{CheckPointReflector, DataFrame, SparkSession}
-import org.apache.spark.sql.catalyst.plans.logical.SubqueryAlias
+import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Filter, Join, LogicalPlan, Project, SubqueryAlias, Union}
+import org.apache.spark.sql.execution.datasources.LogicalRelation
+import org.apache.spark.sql.execution.{LogicalRDD, SparkSqlParser}
+import org.apache.spark.sql.mv.sqlGenerator.{BasicSQLDialect, LogicalPlanSQL}
 import org.apache.spark.sql.types.{DataType, FloatType, IntegerType, LongType, StringType, StructType}
 
 import java.util.Properties
 
 class SchemaRegistry(_spark: SparkSession) extends Logging {
   val spark = _spark
+  val parser: SparkSqlParser = new SparkSqlParser()
 
   def createTableInHudi(tableName: String, sql: String): MaterializedViewCatalyst = {
     spark.sql(sql)
@@ -40,6 +44,13 @@ class SchemaRegistry(_spark: SparkSession) extends Logging {
     MaterializedViewCatalyst.getInstance().registerTableFromLogicalPlan(tableName, logicalPlan)
   }
 
+  def loadAll(spark: SparkSession): Unit = {
+    val data: JsonArray = MetadataClient.loadAllMV().getAsJsonArray("data")
+    data.forEach(name => {
+//      logInfo("load mv:" + name)
+      loadHiveMV(spark, name.getAsString)
+    })
+  }
 
   def loadCkptMV(spark: SparkSession, viewName: String): DataFrame = {
     val checkpointPath = spark.sparkContext.getCheckpointDir
@@ -74,27 +85,65 @@ class SchemaRegistry(_spark: SparkSession) extends Logging {
     df
   }
 
+
   def loadHiveMV(spark: SparkSession, viewName: String): DataFrame = {
-    logInfo("load checkpoint:" + viewName)
+    //    logInfo("load mv:" + viewName)
     // 1. load metadata
+    val start = System.currentTimeMillis()
     val metadata: JsonObject = MetadataClient.loadMV(viewName)
-    val viewCreateSql: String = metadata.get("createSql").getAsString
-    val types = new Gson().fromJson(metadata.get("columnTypes").getAsString, classOf[JsonArray])
-    var schema = new StructType()
-    for(i <- 0 to types.size() - 1) {
-      val column = types.get(i).getAsJsonObject
-      schema = schema.add(column.get("name").getAsString, StringToDataType(column.get("type").getAsString))
-      // println(schema.toDDL)
+    if (metadata == null || metadata.entrySet().size() == 0) {
+      logWarning("load empty")
+      return null
     }
+    logWarning("metadata:" + metadata.toString)
+    val cur = System.currentTimeMillis()
+    val createTime = metadata.get("createTime").getAsLong
+    val ttl = metadata.get("ttl").getAsInt
+    if (cur -  createTime > ttl) {
+      logWarning("load success but expire")
+      logWarning("gap:" + (cur - createTime) + " > " + ttl)
+      return null
+    }
+    val viewCreateSql: String = metadata.get("createSql").getAsString
+    logWarning("http:" + String.valueOf(System.currentTimeMillis() - start)) // 333
+    //    val types = new Gson().fromJson(metadata.get("columnTypes").getAsString, classOf[JsonArray])
+    //    var schema = new StructType()
+    //    for(i <- 0 until types.size()) {
+    //      val column = types.get(i).getAsJsonObject
+    //      schema = schema.add(column.get("name").getAsString, StringToDataType(column.get("type").getAsString))
+    //    }
+
     // 2. switch database and load dataframe
-    // spark.catalog.listDatabases().show()
-    // spark.catalog.setCurrentDatabase("mv")
-    val viewTable = spark.sql(viewCreateSql)
-    val df = spark.sql("select * from mv." + viewName)
-    MaterializedViewCatalyst.getInstance().registerMaterializedViewFromLogicalPlan(viewName, df.queryExecution.withCachedData, viewTable.queryExecution.withCachedData)
+    // val viewTable = spark.sql(viewCreateSql)
+//        val lp = spark.sessionState.sqlParser.parsePlan(viewCreateSql)
+//        val analyzed = spark.sessionState.analyzer.executeAndCheck(lp, new QueryPlanningTracker())
+    //    val analyzed = spark.sessionState.analyzer.execute(lp)
+    val lp = parser.parsePlan(viewCreateSql)
+    logWarning("parse:" + String.valueOf(System.currentTimeMillis() - start))
+    val analyzed = spark.sessionState.analyzer.executeAndCheck(lp, new QueryPlanningTracker())
+    logWarning("analyzed:" + String.valueOf(System.currentTimeMillis() - start)) // 7235
+
+    val df = spark.read.table(viewName)
+    df.queryExecution.analyzed
+//    val dfAnalyzed = toLogicalPlan("select * from " + viewName)
+    logWarning("read:" + String.valueOf(System.currentTimeMillis() - start)) // 8780
+    //    df.cache()
+    logWarning("cache:" + String.valueOf(System.currentTimeMillis() - start)) // 9051
+
     // register rdd dataframe
+    MaterializedViewCatalyst.getInstance().registerMaterializedViewFromLogicalPlan(viewName, df.queryExecution.analyzed, analyzed)
     MaterializedViewCatalyst.getInstance().registerTableFromLogicalPlan(viewName, df.queryExecution.analyzed)
+    logWarning("register:" + String.valueOf(System.currentTimeMillis() - start))
     df
+  }
+
+  def loadCandidate(spark: SparkSession, sql: String): Unit = {
+    val candidate = MetadataClient.loadCandidate(sql)
+    if (candidate.nonEmpty) {
+      loadHiveMV(spark, candidate.head)
+    } else {
+      println("empty candidates.")
+    }
   }
 
   // useless
@@ -184,18 +233,19 @@ class SchemaRegistry(_spark: SparkSession) extends Logging {
   }
 
   def createHiveMV(viewName: String, viewCreateSql: String): Unit = {
-    logInfo("create checkpoint:" + viewName)
+//    logInfo("create hive mv:" + viewName)
     val viewTable = spark.sql(viewCreateSql)
     val df = spark.createDataFrame(viewTable.rdd, viewTable.schema)
     // save to hive
-    df.write.mode("overwrite").saveAsTable("mv." + viewName)
+//    df.show()
+    df.write.mode("overwrite").saveAsTable(viewName)
     val types = attributionToString(viewTable.logicalPlan.output)
     MetadataClient.createMV(viewName, viewCreateSql, types)
   }
 
   def toLogicalPlan(sql: String) = {
-    val temp = spark.sql(sql).queryExecution.analyzed
-    temp
+    val lp = parser.parsePlan(sql)
+    spark.sessionState.analyzer.executeAndCheck(lp, new QueryPlanningTracker())
   }
 
   def attributionToString(output: Seq[Attribute]): String = {
@@ -227,10 +277,43 @@ class SchemaRegistry(_spark: SparkSession) extends Logging {
     }
   }
 
-//  def genSQL(lp: LogicalPlan) = {
-//    val temp = new LogicalPlanSQL(lp, new BasicSQLDialect).toSQL
-//    temp
-//  }
+  def genSQL(lp: LogicalPlan) = {
+    val temp = new LogicalPlanSQL(lp, new BasicSQLDialect).toSQL
+    temp
+  }
+
+  def isStandard(plan: LogicalPlan): Boolean = {
+    // scalastyle:off println
+    println(plan)
+    // scalastyle:on println
+    var isMatch = true
+    plan transformDown {
+      case a@SubqueryAlias(_, Project(_, _)) =>
+        isMatch = false
+        a
+      case a@Union(_, _, _) =>
+        isMatch = false
+        a
+    }
+
+    if (!isMatch) {
+      return false
+    }
+
+    plan match {
+      case p@Project(_, Join(_, _, _, _, _)) => true
+      case p@Project(_, Filter(_, Join(_, _, _, _, _))) => true
+      case p@Aggregate(_, _, Filter(_, Join(_, _, _, _, _))) => true
+      case p@Aggregate(_, _, Filter(_, _)) => true
+      case p@Project(_, Filter(_, _)) => true
+      case p@Aggregate(_, _, Join(_, _, _, _, _)) => true
+      case p@Aggregate(_, _, SubqueryAlias(_, LogicalRDD(_, _, _, _, _))) => true
+      case p@Aggregate(_, _, SubqueryAlias(_, LogicalRelation(_, _, _, _))) => true
+      case p@Project(_, SubqueryAlias(_, LogicalRDD(_, _, _, _, _))) => true
+      case p@Project(_, SubqueryAlias(_, LogicalRelation(_, _, _, _))) => true
+      case _ => false
+    }
+  }
 
 //  def genPrettySQL(lp: LogicalPlan) = {
 //    SQLUtils.format(genSQL(lp), JdbcConstants.HIVE)

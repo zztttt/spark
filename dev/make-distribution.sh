@@ -126,25 +126,29 @@ if [ ! "$(command -v "$MVN")" ] ; then
     exit -1;
 fi
 
-VERSION=$("$MVN" help:evaluate -Dexpression=project.version $@ \
-    | grep -v "INFO"\
-    | grep -v "WARNING"\
-    | tail -n 1)
-SCALA_VERSION=$("$MVN" help:evaluate -Dexpression=scala.binary.version $@ \
-    | grep -v "INFO"\
-    | grep -v "WARNING"\
-    | tail -n 1)
-SPARK_HADOOP_VERSION=$("$MVN" help:evaluate -Dexpression=hadoop.version $@ \
-    | grep -v "INFO"\
-    | grep -v "WARNING"\
-    | tail -n 1)
-SPARK_HIVE=$("$MVN" help:evaluate -Dexpression=project.activeProfiles -pl sql/hive $@ \
-    | grep -v "INFO"\
-    | grep -v "WARNING"\
-    | fgrep --count "<id>hive</id>";\
-    # Reset exit status to 0, otherwise the script stops here if the last grep finds nothing\
-    # because we use "set -o pipefail"
-    echo -n)
+#VERSION=$("$MVN" help:evaluate -Dexpression=project.version $@ \
+#    | grep -v "INFO"\
+#    | grep -v "WARNING"\
+#    | tail -n 1)
+#SCALA_VERSION=$("$MVN" help:evaluate -Dexpression=scala.binary.version $@ \
+#    | grep -v "INFO"\
+#    | grep -v "WARNING"\
+#    | tail -n 1)
+#SPARK_HADOOP_VERSION=$("$MVN" help:evaluate -Dexpression=hadoop.version $@ \
+#    | grep -v "INFO"\
+#    | grep -v "WARNING"\
+#    | tail -n 1)
+#SPARK_HIVE=$("$MVN" help:evaluate -Dexpression=project.activeProfiles -pl sql/hive $@ \
+#    | grep -v "INFO"\
+#    | grep -v "WARNING"\
+#    | fgrep --count "<id>hive</id>";\
+#    # Reset exit status to 0, otherwise the script stops here if the last grep finds nothing\
+#    # because we use "set -o pipefail"
+#    echo -n)
+VERSION=3.1
+SCALA_VERSION=2.12
+SPARK_HADOOP_VERSION=2.10.1
+SPARK_HIVE=1
 
 if [ "$NAME" == "none" ]; then
   NAME=$SPARK_HADOOP_VERSION

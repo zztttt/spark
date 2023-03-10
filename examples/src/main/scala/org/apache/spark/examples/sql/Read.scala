@@ -18,74 +18,71 @@ package org.apache.spark.examples.sql
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
+// import org.apache.spark.sql.catalyst.plans.logical.Join
+// import org.apache.spark.sql.mv.SchemaRegistry
 
 object Read extends Logging {
+  private final val host: String = "localhost"
+  private final val hdfs: String = String.format("hdfs://%s:9000", host)
+  private final val hiveMetastore = String.format("thrift://%s:9083", host)
   def main(args: Array[String]): Unit = {
     val spark = SparkSession
       .builder()
       .appName("Spark SQL Read")
       // config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       // .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
-      .config("hive.metastore.uris", "thrift://reins-PowerEdge-R740-0:9083")
-      .config("spark.sql.warehouse.dir", "hdfs://reins-PowerEdge-R740-0:9000/zzt/data")
+      .config("hive.metastore.uris", hiveMetastore)
+      .config("spark.sql.warehouse.dir", hdfs + "/zzt/data")
       .enableHiveSupport()
       .master("local[*]")
       .getOrCreate()
 
-    // query(spark)
-    showTables(spark)
-    // test(spark)
-    // dropTable(spark)
+//    println(spark.catalog.currentDatabase)
+//    spark.sessionState.catalog.listDatabases()
+//      .foreach(f => println(f.toString))
+//    spark.sessionState.catalog.listTables(spark.catalog.currentDatabase)
+//      .foreach(f => println(f))
+
+//    val lp = new SchemaRegistry(spark).toLogicalPlan("select * from mv1")
+//    var ret = false;
+//    lp transformDown { case a@Join(_, _, _, _, _) => ret = true; a}
+//    println(ret)
+//     query(spark)
+     showTables(spark)
+//     test(spark)
+//     dropTable(spark)
   }
 
   def showTables(spark: SparkSession): Unit = {
-    val sql =
-      """
-        |select l_returnflag, l_linestatus, SUM(l_quantity) as sum_qty, SUM(l_extendedprice) as sum_base_price
-        |from LINEITEM
-        |where L_SHIPDATE >= '1996-01-01' and L_SHIPDATE < '1997-01-01'
-        |group by l_returnflag, l_linestatus
-        |""".stripMargin
-    val start = System.currentTimeMillis()
-    spark.sql(sql).show()
-    val end = System.currentTimeMillis()
-    println(end - start)
-    // println(spark.sql("select * from empts_large").count())
-    // spark.sql("")
+    spark.sql("show tables").show()
   }
 
   def dropTable(spark: SparkSession): Unit = {
-    spark.sql("drop table empts_large").show()
+    spark.sql("drop table mv182").show()
   }
 
-  def test(spark: SparkSession): Unit = {
-    // spark.sql("select * from depts_hudi").show()
-    spark.sql("select count(*) from nation").show() // 25
-    spark.sql("select count(*) from part").show() // 200000
-    spark.sql("select count(*) from supplier").show() // 10000
-    spark.sql("select count(*) from partsupp").show() // 800000
-    spark.sql("select count(*) from customer").show() // 150000
-    spark.sql("select count(*) from orders").show() // 1500000
-    spark.sql("select count(*) from lineitem").show() // 6001215
-    spark.sql("select count(*) from region").show() // 5
-  }
+//  def test(spark: SparkSession): Unit = {
+//    // spark.sql("select * from depts_hudi").show()
+//    spark.sql("select count(*) from nation").show() // 25
+//    spark.sql("select count(*) from part").show() // 200000
+//    spark.sql("select count(*) from supplier").show() // 10000
+//    spark.sql("select count(*) from partsupp").show() // 800000
+//    spark.sql("select count(*) from customer").show() // 150000
+//    spark.sql("select count(*) from orders").show() // 1500000
+//    spark.sql("select count(*) from lineitem").show() // 6001215
+//    spark.sql("select count(*) from region").show() // 5
+//  }
 
   def query(spark: SparkSession): Unit = {
     // 3
     spark.sql(
-      """ select l_orderkey,
-        |    sum(l_extendedprice * (1 - l_discount)) as revenue,
-        |    o_orderdate,
-        |    o_shippriority
-        |from CUSTOMER, ORDERS, LINEITEM
-        |where c_mktsegment = 'MACHINERY'
-        |    and c_custkey = o_custkey
-        |    and l_orderkey = o_orderkey
-        |    and o_orderdate < date '1995-03-06'
-        |    and l_shipdate > date '1995-03-06'
-        |group by l_orderkey, o_orderdate, o_shippriority
-        |order by revenue desc, o_orderdate;
-        |""".stripMargin).show()
+      """
+        |select C_CUSTKEY, count(O_ORDERKEY) as C_COUNT
+        |from CUSTOMER left outer join ORDERS
+        |on C_CUSTKEY = O_CUSTKEY and O_COMMENT not like'special%packages'
+        |group by C_CUSTKEY
+        |""".stripMargin
+    ).show()
 
     // 4
     spark.sql(
